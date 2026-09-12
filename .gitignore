@@ -1,0 +1,19 @@
+# Python environment
+venv/
+__pycache__/
+*.pyc
+
+# Data Lake (Không đẩy file dữ liệu nặng lên Github)
+data/bronze/*
+checkpoints
+data/silver/*
+data/gold/*
+!data/**/.gitkeep
+
+# Model weights
+models/*.pkl
+models/*.joblib
+
+# OS files
+.DS_Store
+Thumbs.db

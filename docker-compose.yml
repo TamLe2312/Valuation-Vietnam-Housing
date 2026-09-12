@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - bigdata_net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,DOCKER_INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:9092,DOCKER_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,DOCKER_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - bigdata_net
+
+  # 2. Data Lake: MinIO
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000" # Cổng API
+      - "9001:9001" # Cổng Giao diện Web
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - bigdata_net
+
+  # 3. NoSQL Database: Cassandra
+  cassandra:
+    image: cassandra:latest
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=HousingCluster
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    networks:
+      - bigdata_net
+
+  # 4. Monitoring: Grafana
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=hadesarchitect-cassandra-datasource
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=hadesarchitect-cassandra-datasource
+    depends_on:
+      - cassandra
+    networks:
+      - bigdata_net
+
+  pricing-api:
+    build:
+      context: .
+      dockerfile: src/api/Dockerfile
+    container_name: housing_pricing_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+    environment:
+      - ENV=production
+    restart: unless-stopped
+    networks:
+      - bigdata_net
+
+volumes:
+  minio_data:
+  cassandra_data:
+
+networks:
+  bigdata_net:
+    driver: bridge
